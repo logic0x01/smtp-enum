@@ -35,17 +35,22 @@ The tool uses optparse for a clean command-line experience.
 Basic Help
 Bash
 
+```
 python3 smtp_enum.py --help
+```
 
 Enumerate using a Wordlist
-Bash
 
+
+```
 python3 smtp_enum.py -t <TARGET_IP> -w usernames.txt
+```
 
 Check a Single Username
-Bash
 
+```
 python3 smtp_enum.py -t <TARGET_IP> -u admin
+```
 
  Technical Details
 
