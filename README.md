@@ -19,13 +19,13 @@ SMTP-Enum is a lightweight, high-speed Python 3 tool designed for security resea
 Ensure you have Python 3.x installed on your system.
 
     Clone the repository:
-    Bash
+    
 
     git clone https://github.com/yourusername/SMTP-Enum.git
     cd SMTP-Enum
 
     Set permissions (Linux/macOS):
-    Bash
+    
 
     chmod +x smtp_enum.py
 
