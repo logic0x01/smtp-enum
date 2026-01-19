@@ -21,7 +21,7 @@ Ensure you have Python 3.x installed on your system.
     Clone the repository:
     
 
-    git clone https://github.com/yourusername/SMTP-Enum.git
+    git clone https://github.com/logic0x01/smtp-enum
     cd SMTP-Enum
 
     Set permissions (Linux/macOS):
