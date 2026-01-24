@@ -8,6 +8,7 @@ from banner import print_banner , G, Y, R, W, B , usage
 
 
 
+
 parser = optparse.OptionParser(usage=usage)
 
 # Targeting Options
@@ -33,6 +34,14 @@ group_config.add_option('-d', '--delay', dest='delay', type="float", default=0.0
 group_config.add_option('-c', '--command', dest='command', default="VRFY", 
                   help='SMTP method to use: VRFY, EXPN, or RCPT TO (default: VRFY)')
 parser.add_option_group(group_config)
+
+# Output Options
+group_output = optparse.OptionGroup(parser, "Output Options")
+
+group_output.add_option('-o', '--output', dest='output', 
+                  help='Path to save the results to a  txt file')
+parser.add_option_group(group_output)
+
 
 opts, args = parser.parse_args()
 
@@ -67,6 +76,21 @@ if opts.wordlist:
         print(f"{R}[!] Error: Wordlist '{opts.wordlist}' not found.{W}")
         sys.exit(1)
 
+
+
+def save_output( file_path , usernames : list , target = "" ) -> str:
+    with open(file_path  , 'w') as file :
+        if target:
+            file.write(f"Target: {target}\n\n")
+        for username in usernames:
+            file.write(f"{username}\n")
+        
+    
+    print(f"{Y}[*] {G}Output {R}Saved {G}Done . ")
+    
+
+
+
 # Enumeration
 def enum_single_target():
     try:
@@ -80,6 +104,9 @@ def enum_single_target():
 
         print(f"{B}[*]{W} Scanning {G}{len(usernames_to_check)}{W} entries...\n")
 
+        VALID_Usernames = []
+
+    
         for username in usernames_to_check:
             if opts.delay > 0:
                 sleep(opts.delay)
@@ -89,7 +116,11 @@ def enum_single_target():
             result = soc.recv(1024).decode(errors='ignore')
             
             if "250" in result or "252" in result:
+                VALID_Usernames.append(username)
                 print(f"{G}[+]{W} VALID: {Y}{username}{W}")
+        
+        if opts.output:
+            save_output(opts.output, VALID_Usernames )        
 
     except Exception or KeyboardInterrupt as e:
         print(f"{R}[!] Connection error: {e}{W}")
@@ -110,8 +141,10 @@ def enum_targets():
             soc.connect((target, 25))
             banner_raw = soc.recv(1024)
 
-            print(f"{B}[*]{W} Scanning {G}{len(usernames_to_check)}{W} entries...\n")
-
+            print(f"{B}[*]{W} Scanning {G}{len(usernames_to_check)}{W} entries...\n")            
+            
+            
+            VALID_Usernames = []
             for username in usernames_to_check:
                 if opts.delay > 0:
                     sleep(opts.delay)
@@ -121,7 +154,12 @@ def enum_targets():
                 result = soc.recv(1024).decode(errors='ignore')
                 
                 if "250" in result or "252" in result:
+                    VALID_Usernames.append(username)
                     print(f"{G}[+]{W} VALID: {Y}{username}{W}")
+                    
+            if opts.output:
+                save_output(opts.output, VALID_Usernames , target )
+                
             
 
         except Exception or KeyboardInterrupt as e:
@@ -138,4 +176,4 @@ if __name__ =="__main__":
     else:
         enum_single_target()
         
-    
+        
