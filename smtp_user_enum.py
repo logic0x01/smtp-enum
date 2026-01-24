@@ -4,53 +4,57 @@ import socket
 import optparse
 import sys
 from time import sleep
-
-
-# Colors
-G, Y, R, W, B = '\033[92m', '\033[93m', '\033[91m', '\033[0m', '\033[94m'
-
-def print_banner(target, mode, delay, command):
-    banner = f"""
-{B}  _______________________________________________________________
-{B} /                                                               \\
-{B} |   {Y}███████╗███╗   ███╗████████╗██████╗     ███████╗███╗   ██╗██╗   ██╗{B} |
-{B} |   {Y}██╔════╝████╗ ████║╚══██╔══╝██╔══██╗    ██╔════╝████╗  ██║██║   ██║{B} |
-{B} |   {Y}███████╗██╔████╔██║   ██║   ██████╔╝    █████╗  ██╔██╗ ██║██║   ██║{B} |
-{B} |   {Y}╚════██║██║╚██╔╝██║   ██║   ██╔═══╝     ██╔══╝  ██║╚██╗██║██║   ██║{B} |
-{B} |   {Y}███████║██║ ╚═╝ ██║   ██║   ██║         ███████╗██║ ╚████║╚██████╔╝{B} |
-{B} |   {Y}╚══════╝╚═╝     ╚═╝   ╚═╝   ╚═╝         ╚══════╝╚═╝  ╚═══╝ ╚═════╝ {B} |
-{B} \\_______________________________________________________________/
-                                              {W}By: {Y}@logic0x01{W}
-    
-    {B}[*]{W} Target : {G}{target}{W}
-    {B}[*]{W} Mode   : {G}{mode}{W}
-    {B}[*]{W} Delay  : {G}{delay}s{W}
-    {B}[*]{W} Command  : {G}{command}
-    """
-    print(banner)
-
-# Parser Setup
-usage = f"\n  {sys.argv[0]} -t <target> [-w <file> | -u <user>] [options]"
+from banner import print_banner , G, Y, R, W, B , usage
 
 
 
 parser = optparse.OptionParser(usage=usage)
 
-parser.add_option('-t', '--target', dest='target', help='Target IP or Hostname')
-parser.add_option('-w', '--wordlist', dest='wordlist', help='Path to usernames  wordlist')
-parser.add_option('-u', '--username', dest='username', help='Single username to check')
-parser.add_option('-d', '--delay', dest='delay', type="float", default=0.0, help='Delay between requests')
-parser.add_option('-c', '--command', dest='command', default="VRFY", help='SMTP command (default: VRFY)')
+# Targeting Options
+group_target = optparse.OptionGroup(parser, "Targeting Options")
+group_target.add_option('-t', '--target', dest='target', 
+                  help='Single target IP address or hostname (e.g., 127.0.0.1)')
+group_target.add_option('-T', '--targets', dest='targets', 
+                  help='Path to a file containing a list of targets (one per line)')
+parser.add_option_group(group_target)
+
+# User Discovery Options
+group_users = optparse.OptionGroup(parser, "User Discovery Options")
+group_users.add_option('-w', '--wordlist', dest='wordlist', 
+                  help='Path to the wordlist file for username enumeration')
+group_users.add_option('-u', '--username', dest='username', 
+                  help='Check a single username only (e.g., root)')
+parser.add_option_group(group_users)
+
+# Configuration Options
+group_config = optparse.OptionGroup(parser, "Scanning Configuration")
+group_config.add_option('-d', '--delay', dest='delay', type="float", default=0.0, 
+                  help='Time to wait between requests in seconds (default: 0.0)')
+group_config.add_option('-c', '--command', dest='command', default="VRFY", 
+                  help='SMTP method to use: VRFY, EXPN, or RCPT TO (default: VRFY)')
+parser.add_option_group(group_config)
 
 opts, args = parser.parse_args()
 
-if not opts.target or (not opts.wordlist and not opts.username):
+
+if not opts.target and not opts.targets:
     parser.print_help()
     sys.exit(1)
 
+if opts.targets:
+    try:
+        with open(opts.targets , 'r') as file_target:
+            targets = [ line.strip() for line in file_target.readlines() ]
+    except FileNotFoundError:
+        print(f"{R}[!] Error: Wordlist '{opts.wordlist}' not found.{W}")
+        sys.exit(1)
 
-mode = "Single User" if opts.username and not opts.wordlist else "Wordlist"
-print_banner(opts.target, mode, opts.delay, opts.command)
+
+Usermode = "Username" if opts.username and not opts.wordlist else "Wordlist"
+Targetmode = " , ".join(targets) if opts.targets else opts.target
+
+
+print_banner(Targetmode, Usermode, opts.delay, opts.command)
 
 # Load usernames
 usernames_to_check = []
@@ -64,29 +68,74 @@ if opts.wordlist:
         sys.exit(1)
 
 # Enumeration
-try:
-    soc = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    soc.settimeout(10) 
+def enum_single_target():
+    try:
+        soc = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        soc.settimeout(10) 
+        
+        print(f"{B}[*]{W} Connecting to target...")
+        
+        soc.connect((opts.target, 25))
+        banner_raw = soc.recv(1024)
+
+        print(f"{B}[*]{W} Scanning {G}{len(usernames_to_check)}{W} entries...\n")
+
+        for username in usernames_to_check:
+            if opts.delay > 0:
+                sleep(opts.delay)
+            
+            cmd_string = f"{opts.command} {username}\r\n"
+            soc.send(cmd_string.encode())
+            result = soc.recv(1024).decode(errors='ignore')
+            
+            if "250" in result or "252" in result:
+                print(f"{G}[+]{W} VALID: {Y}{username}{W}")
+
+    except Exception or KeyboardInterrupt as e:
+        print(f"{R}[!] Connection error: {e}{W}")
+    finally:
+        soc.close()
+        print(f"\n{B}[*]{W} Done.")
+
+
+def enum_targets():
+    for target in targets:
+        try:
+            soc = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            soc.settimeout(10) 
+            
+            print(f"{B}[*]{W} Target : {G}{target}")
+            print(f"{B}[*]{W} Connecting to target...")
+            
+            soc.connect((target, 25))
+            banner_raw = soc.recv(1024)
+
+            print(f"{B}[*]{W} Scanning {G}{len(usernames_to_check)}{W} entries...\n")
+
+            for username in usernames_to_check:
+                if opts.delay > 0:
+                    sleep(opts.delay)
+                
+                cmd_string = f"{opts.command} {username}\r\n"
+                soc.send(cmd_string.encode())
+                result = soc.recv(1024).decode(errors='ignore')
+                
+                if "250" in result or "252" in result:
+                    print(f"{G}[+]{W} VALID: {Y}{username}{W}")
+            
+
+        except Exception or KeyboardInterrupt as e:
+            print(f"{R}[!] Connection error: {e}{W}")
+        finally:
+            soc.close()
+            print(f"\n{B}[*]{W} Done.\n")
+            print(f"{Y}-"*20 )
+
+
+if __name__ =="__main__":
+    if opts.targets:
+        enum_targets()   
+    else:
+        enum_single_target()
+        
     
-    print(f"{B}[*]{W} Connecting to target...")
-    soc.connect((opts.target, 25))
-    banner_raw = soc.recv(1024)
-
-    print(f"{B}[*]{W} Scanning {G}{len(usernames_to_check)}{W} entries...\n")
-
-    for username in usernames_to_check:
-        if opts.delay > 0:
-            sleep(opts.delay)
-        
-        cmd_string = f"{opts.command} {username}\r\n"
-        soc.send(cmd_string.encode())
-        result = soc.recv(1024).decode(errors='ignore')
-        
-        if "250" in result or "252" in result:
-            print(f"{G}[+]{W} VALID: {Y}{username}{W}")
-
-except Exception as e:
-    print(f"{R}[!] Connection error: {e}{W}")
-finally:
-    soc.close()
-    print(f"\n{B}[*]{W} Done.")
