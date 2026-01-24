@@ -1,6 +1,6 @@
 # SMTP-Enum
 
-![SMTP Enum Demo](Tool_SC.png)
+![SMTP Enum Demo](screenshot.png)
 
 > **Username Enumeration Tool For OSCP Prep** > *Created by: [@logic0x01](https://github.com/logic0x01)*
 
